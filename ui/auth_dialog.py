@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel
 from PyQt6.QtCore import Qt
 from core.network import NetworkClient
+from ui.settings_dialog import SettingsDialog
 
 
 class AuthDialog(QDialog):
@@ -12,6 +13,11 @@ class AuthDialog(QDialog):
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         layout = QVBoxLayout(self)
+
+        # Кнопка настроек в верхней части
+        settings_btn = QPushButton("⚙ Настройки сервера")
+        settings_btn.clicked.connect(self._open_settings)
+        layout.addWidget(settings_btn)
 
         self.username_le = QLineEdit(placeholderText="Имя пользователя")
         self.email_le = QLineEdit(placeholderText="Email (только для регистрации)")
@@ -39,6 +45,13 @@ class AuthDialog(QDialog):
         self.network.login_failed.connect(self.status_lbl.setText)
         self.network.logged_in.connect(self.accept)
         self.network.error_occurred.connect(self.status_lbl.setText)
+
+    def _open_settings(self):
+        dialog = SettingsDialog(self)
+        if dialog.exec() == SettingsDialog.DialogCode.Accepted:
+            settings = dialog.get_settings()
+            # Здесь можно обновить конфигурацию приложения
+            print(f"Настройки сохранены: {settings}")
 
     def _do_login(self):
         u, p = self.username_le.text().strip(), self.password_le.text().strip()
