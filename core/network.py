@@ -1,8 +1,7 @@
 import json
-from PyQt6.QtCore import QObject, pyqtSignal, QUrl
+from PyQt6.QtCore import QObject, pyqtSignal, QUrl, QSettings
 from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from PyQt6.QtWebSockets import QWebSocket
-from config import BASE_URL, WS_URL
 
 
 class NetworkClient(QObject):
@@ -20,18 +19,41 @@ class NetworkClient(QObject):
         self.ws = QWebSocket()
         self.token = None
         self.user_id = None
-
         self.ws.textMessageReceived.connect(self._on_ws_message)
 
+    def _get_config(self):
+        settings = QSettings()
+        ip = settings.value("server_ip", "", type=str).strip()
+        port = settings.value("server_port", "8000", type=str).strip()
+        return ip, port
+
     def _build_url(self, path: str) -> QUrl:
-        url = f"{BASE_URL}{path}"
+        ip, port = self._get_config()
+        if not ip:
+            raise ValueError("IP-адрес не указан. Откройте ⚙ Настройки сервера.")
+
+        # ✅ Убираем пробелы и корректно собираем строку
+        url_str = f"http://[{ip}]:{port}{path}"
         if self.token:
-            sep = "&" if "?" in url else "?"
-            url += f"{sep}token={self.token}"
-        return QUrl(url)
+            sep = "&" if "?" in url_str else "?"  # ✅ Исправлено: было " & "
+            url_str += f"{sep}token={self.token}"
+
+        url = QUrl(url_str)
+        if not url.isValid():
+            raise ValueError(f"Некорректный URL: {url_str}")
+
+        return url
 
     def _send_request(self, method: str, path: str, body: dict = None, req_type: str = "default"):
-        url = self._build_url(path)
+        try:
+            url = self._build_url(path)
+        except ValueError as e:
+            self.error_occurred.emit(str(e))
+            return
+        except Exception as e:
+            self.error_occurred.emit(f"Ошибка формирования URL: {e}")
+            return
+
         req = QNetworkRequest(url)
         req.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/json")
         payload = json.dumps(body).encode() if body else b""
@@ -57,7 +79,7 @@ class NetworkClient(QObject):
         try:
             data = json.loads(reply.readAll().data().decode())
         except Exception as e:
-            self.error_occurred.emit(f"JSON ошибка: {e}")
+            self.error_occurred.emit(f"Ошибка парсинга JSON: {e}")
             reply.deleteLater()
             return
 
@@ -83,14 +105,12 @@ class NetworkClient(QObject):
         elif req_type == "send_msg":
             self.message_sent.emit(data)
 
-    # --- Публичные методы API ---
     def login(self, username: str, password: str):
-        self._send_request("POST", "/auth/login",
-                           {"username": username, "password": password, "email": ""}, "login")
+        self._send_request("POST", "/auth/login", {"username": username, "password": password, "email": ""}, "login")
 
     def register(self, username: str, email: str, password: str):
-        self._send_request("POST", "/auth/register",
-                           {"username": username, "email": email, "password": password}, "register")
+        self._send_request("POST", "/auth/register", {"username": username, "email": email, "password": password},
+                           "register")
 
     def load_users(self):
         self._send_request("GET", "/users/", req_type="users")
@@ -99,13 +119,12 @@ class NetworkClient(QObject):
         self._send_request("GET", f"/messages/history/{receiver_id}", req_type="history")
 
     def send_message(self, receiver_id: int, content: str):
-        self._send_request("POST", "/messages/",
-                           {"content": content, "receiver_id": receiver_id}, "send_msg")
+        self._send_request("POST", "/messages/", {"content": content, "receiver_id": receiver_id}, "send_msg")
 
-    # --- WebSocket ---
     def _connect_ws(self):
-        ws_url = QUrl(f"{WS_URL}/messages/ws?token={self.token}")
-        self.ws.open(ws_url)
+        ip, port = self._get_config()
+        if not ip: return
+        self.ws.open(QUrl(f"ws://[{ip}]:{port}/messages/ws?token={self.token}"))
 
     def _on_ws_message(self, text: str):
         try:

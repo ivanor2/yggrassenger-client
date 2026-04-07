@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, QFormLayout
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, QFormLayout, QMessageBox
 from PyQt6.QtCore import QSettings
 
 
@@ -10,8 +10,6 @@ class SettingsDialog(QDialog):
         self.setWindowFlags(self.windowFlags() & ~self.windowFlags().WindowContextHelpButtonHint)
 
         layout = QVBoxLayout(self)
-
-        # Форма настроек
         form_layout = QFormLayout()
 
         self.server_ip_le = QLineEdit(placeholderText="2001:db8::1")
@@ -20,16 +18,13 @@ class SettingsDialog(QDialog):
 
         form_layout.addRow("Адрес сервера (IPv6):", self.server_ip_le)
         form_layout.addRow("Порт:", self.server_port_le)
-
         layout.addLayout(form_layout)
 
-        # Описание
-        desc_label = QLabel("Укажите адрес сервера в формате IPv6.\nПример: 2001:db8::1")
+        desc_label = QLabel("Укажите реальный IPv6-адрес сервера Yggdrasil.")
         desc_label.setStyleSheet("color: #6b7280; font-size: 12px; margin-top: 8px;")
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
 
-        # Кнопки
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         self.save_btn = QPushButton("Сохранить")
@@ -38,25 +33,40 @@ class SettingsDialog(QDialog):
         btn_layout.addWidget(self.cancel_btn)
         layout.addLayout(btn_layout)
 
-        # Загрузка сохраненных настроек
         self._load_settings()
-
-        # Подключение кнопок
-        self.save_btn.clicked.connect(self.accept)
+        # Важно: сохраняем ДО закрытия окна
+        self.save_btn.clicked.connect(self._save_and_accept)
         self.cancel_btn.clicked.connect(self.reject)
 
     def _load_settings(self):
-        settings = QSettings("YggMessenger", "Settings")
-        server_ip = settings.value("server_ip", "")
-        server_port = settings.value("server_port", "8000")
-        
-        if server_ip:
-            self.server_ip_le.setText(server_ip)
-        if server_port:
-            self.server_port_le.setText(str(server_port))
+        try:
+            settings = QSettings()
+            ip = settings.value("server_ip", "", type=str)
+            port = settings.value("server_port", "8000", type=str)
+            if ip: self.server_ip_le.setText(ip)
+            if port: self.server_port_le.setText(str(port))
+        except Exception:
+            pass
 
-    def get_settings(self):
-        return {
-            "server_ip": self.server_ip_le.text().strip(),
-            "server_port": self.server_port_le.text().strip()
-        }
+    def _save_and_accept(self):
+        ip = self.server_ip_le.text().strip()
+        port = self.server_port_le.text().strip()
+
+        if not ip:
+            QMessageBox.warning(self, "Ошибка", "Введите IPv6-адрес сервера")
+            return
+
+        try:
+            settings = QSettings()
+            settings.setValue("server_ip", ip)
+            settings.setValue("server_port", port)
+            settings.sync()  # Принудительная запись на диск
+
+            # ✅ Проверяем, прошла ли запись успешно
+            if settings.status() != QSettings.Status.NoError:
+                raise PermissionError(
+                    "Нет прав на запись файла настроек. Запустите от имени пользователя или проверьте права папки ~/.config/")
+
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка сохранения", f"Не удалось сохранить настройки:\n{str(e)}")

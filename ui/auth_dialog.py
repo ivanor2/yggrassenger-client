@@ -49,9 +49,7 @@ class AuthDialog(QDialog):
     def _open_settings(self):
         dialog = SettingsDialog(self)
         if dialog.exec() == SettingsDialog.DialogCode.Accepted:
-            settings = dialog.get_settings()
-            # Здесь можно обновить конфигурацию приложения
-            print(f"Настройки сохранены: {settings}")
+            print(f"Настройки сохранены")
 
     def _do_login(self):
         u, p = self.username_le.text().strip(), self.password_le.text().strip()

@@ -1,7 +1,6 @@
 import sys
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import QSettings
-from config import YGG_SERVER_IP
+from PyQt6.QtCore import QSettings  # <<< ДОБАВИТЬ ИМПОРТ
 from core.network import NetworkClient
 from ui.auth_dialog import AuthDialog
 from ui.chat_window import ChatWindow
@@ -11,6 +10,11 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
 
+    app.setOrganizationName("YggDev")
+    app.setApplicationName("YggMessenger")
+
+    # ✅ Явно указываем INI-формат. Файл будет создан в домашней директории пользователя.
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
 
     network = NetworkClient()
     current_user = {}
@@ -27,6 +31,4 @@ def main():
 
 
 if __name__ == "__main__":
-    if "2xx:xxxx" in YGG_SERVER_IP:
-        print("⚠️  ВНИМАНИЕ: Замените YGG_SERVER_IP в config.py на реальный IPv6 вашего сервера!")
     main()
